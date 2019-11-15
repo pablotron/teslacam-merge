@@ -97,6 +97,9 @@ class TeslaCam::Model
     [
       config.ffmpeg,
 
+      # hide ffmpeg banner
+      '-hide_banner',
+
       # sorted list of videos (in order of CAMS, see above)
       *(paths.map { |path| ['-i', path] }.flatten),
 
