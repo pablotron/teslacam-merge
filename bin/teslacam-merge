@@ -1,5 +1,22 @@
 #!/usr/bin/env ruby
 
+#
+# teslacam-merge: Merge teslacam videos into one combined video.
+#
+# Example usage:
+#
+#   # merge all 2019-11-07_22-22-26* videos into out.mp4
+#   teslacam-merge out.mp4 2019-11-07_22-22-26-*
+#
+#   # merge all 2019-11-07_22-22-26* videos and 2019-11-07_22-23-26-*
+#   # videos into combined.mp4
+#   teslacam-merge combined.mp4 2019-11-07_22-23-26-* 2019-11-07_22-22-26-*
+#
+# notes:
+# * src video size: 1280x960
+# * ffmpeg command src: https://trac.ffmpeg.org/wiki/Create%20a%20mosaic%20out%20of%20several%20input%20videos
+#
+
 require_relative '../lib/teslacam'
 
 ::TeslaCam::CLI.run($0, ARGV) if __FILE__ == $0
