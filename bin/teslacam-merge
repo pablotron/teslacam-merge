@@ -1,0 +1,152 @@
+#!/usr/bin/env ruby
+
+#
+# tesla-merge.rb: merge 4 teslacam videos into one
+#
+# example usage:
+#
+#   tesla-merge.rb out.mp4 2019-11-07_22-22-26-*
+#
+# notes:
+# * src video size: 1280x960
+# * ffmpeg command src: https://trac.ffmpeg.org/wiki/Create%20a%20mosaic%20out%20of%20several%20input%20videos
+# 
+
+require 'time'
+
+TIME_FORMAT = '%<year>s-%<month>s-%<day>sT%<hour>s:%<min>s:%<sec>s'
+
+# large (x0.75, default)
+# W, H = 960, 720
+# FONT_SIZE = 32
+
+# medium (x0.5625)
+# W, H = 720, 540
+# FONT_SIZE = 24
+
+# small (testing)
+W, H = 320, 240
+FONT_SIZE = 16
+
+# camera IDs
+CAMS = %i{front back left_repeater right_repeater}
+
+# build font config
+FONT = [
+  'fontcolor=white@0.8',
+  "fontsize=#{FONT_SIZE}",
+
+  # 'shadowcolor=black@0.5',
+  # 'shadowx=1',
+  # 'shadowy=1',
+
+  # 'box=1',
+  # 'boxborderw=2',
+  # 'boxcolor=black@0.5',
+
+  'borderw=1',
+  'bordercolor=black@0.5',
+].join(':')
+
+# check command-line arguments
+if ARGV.size < 5
+  warn "Usage: #$0 out.mp4 in1.mp4 in2.mp4 in3.mp4 in4.mp4"
+  exit -1
+end
+
+# get output path
+OUT_PATH = ARGV.shift
+
+# parse input video names and build a map of timestamps to a map of
+# camera name to timestamp and absolute path
+VIDEOS = ARGV.each.with_object(Hash.new { |h, k|  h[k] = {} }) do |abs_path, r|
+  if md = File.basename(abs_path).match(/^
+    (?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})_
+    (?<hour>\d{2})-(?<min>\d{2})-(?<sec>\d{2})-
+    (?<name>[a-z_]+)\.mp4
+  $/mx)
+    # build data
+    data = (md.names.each.with_object({}) { |s, mr|
+      i = s.intern
+      mr[i] = md[i]
+    }).merge({
+      path: abs_path,
+    })
+
+    # build key
+    key = TIME_FORMAT % data
+    r[key][md[:name].intern] = data
+  end
+end
+
+# check for missing videos in each set
+VIDEOS.each do |time, videos|
+  missing = CAMS - videos.keys
+  raise "missing videos in #{time}: #{missing * ', '}" if missing.size > 0
+end
+
+# get first time
+FIRST_TIME = VIDEOS.keys.sort.first
+
+# extract timestamp from front camera video name
+# ts = Time.parse(TIME_FORMAT % VIDEOS[FIRST_TIME][:front])
+
+# dump debugging info
+# pp ts.to_i
+# pp VIDEOS
+# exit 0
+
+# build filter clause
+FILTER = VIDEOS.keys.sort.each_with_index.map { |key, i|
+  # extract timestamp from key
+  ts = Time.parse(key)
+
+  # build sink id
+  sink_id = (VIDEOS.keys.size > 1) ? "[v#{i}]" : ''
+
+  "
+    nullsrc=size=#{W*2}x#{H*2}:duration=60 [v#{i}_bg];
+    [#{4 * i + 0}:v] setpts=PTS-STARTPTS, scale=#{W}x#{H} [v#{i}_tl];
+    [#{4 * i + 1}:v] setpts=PTS-STARTPTS, scale=#{W}x#{H} [v#{i}_tr];
+    [#{4 * i + 2}:v] setpts=PTS-STARTPTS, scale=#{W}x#{H} [v#{i}_bl];
+    [#{4 * i + 3}:v] setpts=PTS-STARTPTS, scale=#{W}x#{H} [v#{i}_br];
+    [v#{i}_bg][v#{i}_tl] overlay=shortest=0 [v#{i}_t0];
+    [v#{i}_t0][v#{i}_tr] overlay=shortest=0:x=#{W} [v#{i}_t1];
+    [v#{i}_t1][v#{i}_bl] overlay=shortest=0:y=#{H} [v#{i}_t2];
+    [v#{i}_t2][v#{i}_br] overlay=shortest=0:x=#{W}:y=#{H} [v#{i}_t3];
+    [v#{i}_t3] drawtext=text=front:x=4:y=3:#{FONT} [v#{i}_t4];
+    [v#{i}_t4] drawtext=text=back:x=(w-text_w-4):y=3:#{FONT} [v#{i}_t5];
+    [v#{i}_t5] drawtext=text=left:x=4:y=(h-text_h-3):#{FONT} [v#{i}_t6];
+    [v#{i}_t6] drawtext=text=right:x=(w-text_w-4):y=(h-text_h-3):#{FONT} [v#{i}_t7];
+    [v#{i}_t7] drawtext=text=%{pts\\\\:localtime\\\\:#{ts.to_i}}:x=(w-text_w)/2:y=(h-text_h-5):#{FONT} #{sink_id}
+  "
+}.concat((VIDEOS.keys.size > 1) ? [
+  '%s concat=n=%d' % [
+    VIDEOS.keys.size.times.map { |i| "[v#{i}]" }.join(''),
+    VIDEOS.keys.size,
+  ],
+] : []).join(';')
+
+puts FILTER
+# exit 0
+
+# build command
+cmd = [
+  '/usr/bin/ffmpeg', 
+
+  # sorted list of videos (in order of CAMS, see above)
+  *(VIDEOS.keys.sort.reduce([]) do |r, key|
+    CAMS.reduce(r) do |r, cam|
+      r += ['-i', VIDEOS[key][cam][:path]]
+    end
+  end.flatten),
+  # *(CAMS.map { |cam| [ '-i', VIDEOS[FIRST_TIME][cam][:path] ] }.flatten),
+  # *(ARGV.map { |s| [ '-i', s ] }.flatten),
+
+  '-filter_complex', FILTER,
+  '-c:v', 'libx264',
+  OUT_PATH,
+]
+
+# run command
+Kernel.exec(*cmd)
