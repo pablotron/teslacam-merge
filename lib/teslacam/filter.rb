@@ -8,11 +8,17 @@ class TeslaCam::Filter
     # build filter clause
     @s = model.times.each_with_index.map { |time, i|
       [
+        # get null source and video source nodes
         sources(i, config),
+
+        # get overlay nodes
         overlays(i, config),
+
+        # get text overlay nodes
         texts(i, config, time, num_times),
       ]
     }.flatten.concat(
+      # get concatenate node
       concat_expr(num_times)
     ).join(';').freeze
   end
@@ -30,6 +36,8 @@ class TeslaCam::Filter
     w = config.size.w
     h = config.size.h
 
+    # TODO: handle missing videos (e.g., check for front and
+    # map it to null source if it doesn't exist)
     "
       nullsrc=size=#{w*2}x#{h*2}:duration=60 [v#{i}_bg];
       [#{4 * i + 0}:v] setpts=PTS-STARTPTS, scale=#{w}x#{h} [v#{i}_tl];
