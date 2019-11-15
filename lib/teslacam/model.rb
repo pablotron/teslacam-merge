@@ -1,5 +1,5 @@
 class TeslaCam::Model
-  attr :config, 
+  attr :config,
        :videos,
        :times,
        :paths,
@@ -95,7 +95,7 @@ class TeslaCam::Model
   #
   def get_command(config, paths, filter)
     [
-      '/usr/bin/ffmpeg', 
+      config.ffmpeg,
 
       # sorted list of videos (in order of CAMS, see above)
       *(paths.map { |path| ['-i', path] }.flatten),
