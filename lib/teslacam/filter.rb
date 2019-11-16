@@ -5,11 +5,11 @@ class TeslaCam::Filter
     config = model.config
     num_times = model.times.size
 
-    # build filter clause
+    # build filter string
     @s = model.times.each_with_index.map { |time, i|
       [
         # get null source and video source nodes
-        sources(i, config),
+        sources(i, model, time),
 
         # get overlay nodes
         overlays(i, config),
@@ -21,6 +21,9 @@ class TeslaCam::Filter
       # get concatenate node
       concat_expr(num_times)
     ).join(';').freeze
+
+    # puts @s
+    # exit 0
   end
 
   def to_s
@@ -29,23 +32,86 @@ class TeslaCam::Filter
 
   private
 
+  QUADS = {
+    tl: :front,
+    tr: :back,
+    bl: :left_repeater,
+    br: :right_repeater,
+  }
+
   #
   # Get video sources.
   #
-  def sources(i, config)
-    w = config.size.w
-    h = config.size.h
+  def sources(i, model, time)
+    # get missing color and quad size from config
+    color = model.config.missing_color
+    w = model.config.size.w
+    h = model.config.size.h
 
-    # TODO: handle missing videos (e.g., check for front and
-    # map it to null source if it doesn't exist)
-    "
-      nullsrc=size=#{w*2}x#{h*2}:duration=60 [v#{i}_bg];
-      [#{4 * i + 0}:v] setpts=PTS-STARTPTS, scale=#{w}x#{h} [v#{i}_tl];
-      [#{4 * i + 1}:v] setpts=PTS-STARTPTS, scale=#{w}x#{h} [v#{i}_tr];
-      [#{4 * i + 2}:v] setpts=PTS-STARTPTS, scale=#{w}x#{h} [v#{i}_bl];
-      [#{4 * i + 3}:v] setpts=PTS-STARTPTS, scale=#{w}x#{h} [v#{i}_br]
-    "
+    # build map of quad ID to argument number of corresponding video
+    # on command-line
+    lut = QUADS.keys.reduce({
+      # get command line argument offset for files in this set
+      ofs: i.times.reduce(0) do |r, j|
+        r + model.videos[model.times[j]].size
+      end,
+
+      args: []
+    }) do |r, id|
+      if model.videos[time][QUADS[id]]
+        r[:args] << { id: id, ofs: r[:ofs] }
+        r[:ofs] += 1
+      end
+      r
+    end[:args].each.with_object({}) do |row, r|
+      r[row[:id]] = row[:ofs]
+    end
+
+    # build null sources
+    [
+      "nullsrc=size=#{w*2}x#{h*2}:d=60, drawbox=c=#{color}:t=fill [v#{i}_bg]",
+    ].concat((QUADS.keys - lut.keys).map { |id|
+      # missing video
+      "nullsrc=size=#{w}x#{h}:d=60 [v#{i}_#{id}]"
+    }).concat(lut.map { |id, ofs|
+      # command-line argument source
+      "[#{ofs}:v] setpts=PTS-STARTPTS, scale=#{w}x#{h} [v#{i}_#{id}]"
+    }).join(';')
   end
+
+  #
+  # Ordered list of video overlays.
+  #
+  OVERLAYS = [{
+    srcs: %w{bg tl},
+    dst: 't0',
+    x: 0,
+    y: 0,
+  }, {
+    srcs: %w{t0 tr},
+    dst: 't1',
+    x: 1,
+    y: 0,
+  }, {
+    srcs: %w{t1 bl},
+    dst: 't2',
+    x: 0,
+    y: 1,
+  }, {
+    srcs: %w{t2 br},
+    dst: 't3',
+    x: 1,
+    y: 1,
+  }]
+
+  #
+  # Video overlay format string.
+  #
+  OVERLAY_FORMAT = '
+    [v%<i>d_%<src0>s][v%<i>d_%<src1>s]
+    overlay=shortest=0:x=%<x>d:y=%<y>d
+    [v%<i>d_%<dst>s]
+  '.gsub(/[\s\n]+/mx, ' ').strip.freeze
 
   #
   # Get video overlays.
@@ -54,12 +120,15 @@ class TeslaCam::Filter
     w = config.size.w
     h = config.size.h
 
-    "
-      [v#{i}_bg][v#{i}_tl] overlay=shortest=0 [v#{i}_t0];
-      [v#{i}_t0][v#{i}_tr] overlay=shortest=0:x=#{w} [v#{i}_t1];
-      [v#{i}_t1][v#{i}_bl] overlay=shortest=0:y=#{h} [v#{i}_t2];
-      [v#{i}_t2][v#{i}_br] overlay=shortest=0:x=#{w}:y=#{h} [v#{i}_t3]
-    "
+    OVERLAYS.map { |row|
+      OVERLAY_FORMAT % row.merge({
+        src0: row[:srcs].first,
+        src1: row[:srcs].last,
+        i: i,
+        x: row[:x] * w,
+        y: row[:y] * h,
+      })
+    }.join(';')
   end
 
   #
@@ -85,15 +154,27 @@ class TeslaCam::Filter
     text: '%%{pts\\\\:localtime\\\\:%<ts>i}',
     x:    '(w-text_w)/2',
     y:    '(h-text_h-5)',
+  }, {
+    text: '%<title>s',
+    x:    '(w-text_w)/2',
+    y:    '3',
   }]
 
   #
   # Get text overlays
   #
   def texts(i, config, time, num_times)
-    # get timestamp offset and font
-    ts = Time.parse(time).to_i
+    # get font
     font = get_font(config)
+
+    # build text args
+    text_args = {
+      # timestamp offset
+      ts: Time.parse(time).to_i,
+
+      # video title
+      title: config.title, # FIXME: need to escape this
+    }
 
     # build and return result
     '[v%<i>d_t3] %<texts>s %<sink>s' % {
@@ -101,7 +182,7 @@ class TeslaCam::Filter
 
       texts: TEXTS.map { |row|
         'drawtext=text=%<text>s:x=%<x>s:y=%<y>s:%<font>s' % row.merge({
-          text: row[:text] % { ts: ts },
+          text: row[:text] % text_args,
           font: font,
         })
       }.join(', '),

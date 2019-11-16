@@ -1,4 +1,5 @@
 require 'pp'
+require 'logger'
 
 #
 # Command-line interface.
@@ -13,7 +14,8 @@ module TeslaCam::CLI
   def self.run(app, args)
     # get config from command-line, build model
     config = ::TeslaCam::CLI::Config.new(app, args)
-    model = ::TeslaCam::Model.new(config)
+    log = ::Logger.new(STDERR)
+    model = ::TeslaCam::Model.new(config, log)
 
     # exec command
     # pp model.command

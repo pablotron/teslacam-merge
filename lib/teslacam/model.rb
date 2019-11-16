@@ -25,9 +25,10 @@ class TeslaCam::Model
   #
   CAMS = %i{front back left_repeater right_repeater}
 
-  def initialize(config)
+  def initialize(config, log)
     # cache config
     @config = config
+    @log = log
 
     # extract video sets from input file names
     @videos = parse_inputs(config.inputs)
@@ -71,7 +72,8 @@ class TeslaCam::Model
     videos.each do |time, videos|
       missing = CAMS - videos.keys
       if missing.size > 0
-        raise "missing videos in #{time}: #{missing * ', '}"
+        # some videos missing, raise warning
+        @log.warn { "missing videos in #{time}: #{missing * ', '}" }
       end
     end
 
@@ -84,7 +86,9 @@ class TeslaCam::Model
   #
   def get_paths(times, videos)
     times.reduce([]) do |r, time|
-      CAMS.reduce(r) do |r, cam|
+      CAMS.select { |cam|
+        videos[time].key?(cam)
+      }.reduce(r) do |r, cam|
         r << videos[time][cam][:path]
       end
     end
