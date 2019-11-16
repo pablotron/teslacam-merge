@@ -14,11 +14,16 @@ module TeslaCam::CLI
   def self.run(app, args)
     # get config from command-line, build model
     config = ::TeslaCam::CLI::Config.new(app, args)
-    log = ::Logger.new(STDERR)
+
+    # create logger from config
+    log = ::Logger.new(config.quiet ? nil : STDERR)
+
+    # create model from config and log
     model = ::TeslaCam::Model.new(config, log)
 
+
     # exec command
-    # pp model.command
+    log.debug { 'exec: %p' % [model.command] }
     ::Kernel.exec(*model.command)
   end
 end

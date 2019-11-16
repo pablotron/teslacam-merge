@@ -104,6 +104,9 @@ class TeslaCam::Model
       # hide ffmpeg banner
       '-hide_banner',
 
+      # set ffmpeg log level
+      '-loglevel', (config.quiet ? 'fatal' : 'info'),
+
       # sorted list of videos (in order of CAMS, see above)
       *(paths.map { |path| ['-i', path] }.flatten),
 

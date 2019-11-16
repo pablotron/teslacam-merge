@@ -3,6 +3,7 @@
 #
 class TeslaCam::Config
   attr :ffmpeg,
+       :quiet,
        :output,
        :inputs,
        :size,
@@ -17,7 +18,17 @@ class TeslaCam::Config
     # path to ffmpeg command
     @ffmpeg = '/usr/bin/ffmpeg'
 
-    @title = 'test title'
+    # make ffmpeg only show fatal errors
+    @quiet = false
+
+    # video title
+    @title = ''
+
+    # output size
+    @size = ::TeslaCam::Size.new(320, 240)
+
+    # font size
+    @font_size = 16
 
     # background color for missing videos
     @missing_color = 'black'
