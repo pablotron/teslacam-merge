@@ -11,3 +11,13 @@ Example:
 teslacam-merge -t 'sample video' -s 320x240 -o sentry-example.mp4 \
   2019-11-08_01-55-17-* 2019-11-08_01-48-14-{left,right}*.mp4
 ```
+
+## Installation
+
+Install `teslacam-merge` via [RubyGems][]:
+
+```
+gem install teslacam-merge
+```
+
+  [rubygems]: https://rubygems.org/
