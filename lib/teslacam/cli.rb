@@ -7,6 +7,7 @@ require 'logger'
 module TeslaCam::CLI
   LIB_DIR = File.join(__dir__, 'cli').freeze
   autoload :Config, File.join(LIB_DIR, 'config.rb')
+  autoload :Presets, File.join(LIB_DIR, 'presets.rb')
 
   #
   # Run from command-line.
@@ -20,7 +21,6 @@ module TeslaCam::CLI
 
     # create model from config and log
     model = ::TeslaCam::Model.new(config, log)
-
 
     # exec command
     log.debug { 'exec: %p' % [model.command] }

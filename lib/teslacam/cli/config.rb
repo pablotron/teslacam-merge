@@ -37,6 +37,12 @@ class TeslaCam::CLI::Config < ::TeslaCam::Config
         @title = val
       end
 
+      o.on('-p', '--preset [name]', String, 'Use preset.') do |val|
+        p = ::TeslaCam::CLI::Presets.get(val)
+        @size = ::TeslaCam::Size.new(p[:size][0] / 2, p[:size][1] / 2)
+        @font_size = p[:font_size]
+      end
+
       o.on('-q', '--quiet', 'Silence ffmpeg output.') do
         @quiet = true
       end
