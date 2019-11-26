@@ -11,6 +11,13 @@ class TeslaCam::Config
        :missing_color,
        :title
 
+  DEFAULTS = {
+    title: '',
+    size: ::TeslaCam::Size.new(320, 240),
+    font_size: 16,
+    missing_color: 'black',
+  }.freeze
+
   #
   # Create a new Config instance and set defaults.
   #
@@ -22,15 +29,15 @@ class TeslaCam::Config
     @quiet = false
 
     # video title
-    @title = ''
+    @title = DEFAULTS[:title]
 
     # output size
-    @size = ::TeslaCam::Size.new(320, 240)
+    @size = DEFAULTS[:size]
 
     # font size
-    @font_size = 16
+    @font_size = DEFAULTS[:font_size]
 
     # background color for missing videos
-    @missing_color = 'black'
+    @missing_color = DEFAULTS[:missing_color]
   end
 end
