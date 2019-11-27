@@ -1,5 +1,5 @@
 module TeslaCam
-  VERSION = '0.1.0'
+  VERSION = '0.2.0'
 
   LIB_DIR = File.join(__dir__, 'teslacam').freeze
 
